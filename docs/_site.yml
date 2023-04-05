@@ -4,9 +4,9 @@ navbar:
   title: "Cars"
   left:
   - text: "Home"
-      href: index.html
-  - text: "Notes"
       href: Poisson_Regression_Notes.html
+  - text: "Notes"
+      href: index.html
 output:
   html_document:
     theme: cosmo
