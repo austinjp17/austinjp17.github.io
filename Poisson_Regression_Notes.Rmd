@@ -1,25 +1,10 @@
 ---
 title: "Poisson Regression Notes"
-knit: (function(input_file, encoding) {
-  out_dir <- 'docs';
-  rmarkdown::render(input_file,
-    encoding=encoding,
-    output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
 author: "Austin Palmer"
 header-includes:
   - \usepackage{amsmath}
 date: "2023-04-03"
-output:
-  html_document:
-    theme: readable
-    highlight: zenburn
-    code_folding: hide
-    toc: true
-    toc_depth: 3
-    number_sections: false
-    toc_float:
-      collapsed: false
-      smooth_scroll: true
+
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
@@ -133,7 +118,7 @@ Analyzing a scatter plot of the number of LGBTQ+ `laws` vs `percent_urban` popul
 
 We know the typical number of laws to be centered around 7. We utilize weakly informative priors for the other parameters.
 
-```{r, results=FALSE}
+```{r Normal Model Build, results=FALSE}
 b0 <- normal(7,1.5)
 b1 <- normal(0, 2.5, autoscale = TRUE)
 sigma <- exponential(1, autoscale = TRUE)
@@ -145,7 +130,7 @@ equality_normal_sim <- stan_glm(laws~percent_urban + historical,
                                 chains=4, iter=5000*2, seed=84735)
 ```
 
-```{r}
+```{r Normal Model Check}
 pp_check(equality_normal_sim, plotfun = "hist", nreps=5) +
   geom_vline(xintercept = 0) +
   xlab("laws")
@@ -268,7 +253,7 @@ First, consider the prior for the centered intercept $\beta_{0c}$. Recall our pr
 
 To examine if these combined priors accurately reflect our uncertain understanding of state laws, we'll simulate 20,000 draws from the prior models of ($\beta_0, \beta_1, \beta_2, \beta_3$). To this end, we can run the same `stan_glm()` used to simulate the posterior with two new arguments: `prior_PD = TRUE`, which specifies that we wish to simulate the *prior*, and `family = poisson`, to indicate we're using a Poisson data model.
 
-```{r, results=FALSE}
+```{r Poisson Model Build Prior, results=FALSE}
 b0 <- normal(2,0.5)
 b1 <- normal(0, 2.5, autoscale = TRUE)
 
@@ -299,7 +284,7 @@ The mess of curves reflects our prior uncertainty. The lines are all over the ma
 ### Simulating the Posterior
 
 
-```{r, results=FALSE}
+```{r Poisson Posterior Build, results=FALSE}
 equality_model <- update(equality_model_prior, prior_PD = FALSE)
 ```
 
@@ -328,7 +313,7 @@ Comparing 50 plausibilities, we can see that the simulations aren't perfect but 
 
 With the reassurance that our model isn't too wrong, lets dig into the posterior results, beginning with the big picture. The 50 posterior plausible models below provide insight into our overall understanding of anti-discrimination laws.
 
-```{r, warnings=FALSE}
+```{r warning=FALSE}
 equality %>%
   add_fitted_draws(equality_model, n = 50) %>%
   ggplot(aes(x = percent_urban, y = laws, color = historical)) +
@@ -453,7 +438,7 @@ Across the 49 states in our study, the observed numbers of anti-discrimination l
 
 For due diligence, we also calculate the *cross-validated* posterior predictive accuracy in apply this model to a "new" set of 50 states, or the *same* set of 50 states under the recognition that our current data is just a andom snapshot in time.
 
-```{r}
+```{r Cross Validating Poisson}
 #Cross-Validation
 set.seed(84735)
 poisson_cv <- prediction_summary_cv(model = equality_model,
