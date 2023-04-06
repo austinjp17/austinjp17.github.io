@@ -1,0 +1,359 @@
+---
+title: "austin_palmer_hw6"
+author: "Austin Palmer"
+date: "2023-03-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(magrittr)
+library(bayesrules)
+library(tidyverse)
+library(rstanarm)
+library(rstan)
+library(bayesplot)
+library(tidyverse)
+library(broom.mixed)
+library(tidybayes)
+penguin_data <- penguins_bayes %>% 
+  filter(species %in% c("Adelie", "Gentoo"))
+```
+
+## 11.2
+
+a) There is no indicator for Ford because the model must have a baseline to compare the other factors to. 
+
+b) $\beta_2$ can be interpreted as the scalar difference in car MPG between Ford and Subaru.
+
+c) If car's make is Ford then $\beta_1,\beta_2, \text{and} \beta_3$ would be zero, yielding $\mu = \beta_0$, implying that that the intercept, $\beta_0$, is a Ford car's MPG.
+
+## 11.3
+
+$\mu$: tomato's weight
+
+$X_1$: Number of days growing
+
+$X_2$: Type: Stripey or Roma
+
+$\mu = \beta_0 + \beta_1X_1 + \beta_2X_2$
+
+**a)**
+
+  - $\beta_0$: The initial weight of a tomato plant
+  
+  - $\beta_1$: The average weight gain per day of growth
+  
+  - $\beta_2$: The offset in weight between Roma and Mr. Stripey tomato plants
+  
+**b)** If $\beta_2$ were 0 then there is no difference in weight between Roma and Mr. Stripey tomato plants
+
+## 11.4
+
+$\mu = \beta_0 + \beta_1X_1 + \beta_2X_2 + \beta_3X_1X_2$
+
+**a)** If $X_1$ and $X_2$ interact, then the rate of daily growth should be different for each type of plant
+
+**b)** $\beta_3$ can be interpreted as the difference in growth rate between roma and Mr. Stripey tomato plants
+
+## 11.10
+
+**a)** body_mass_g ~ flipper_length + species
+
+
+```{r, echo=FALSE, warning=FALSE}
+ggplot(penguin_data, aes(y = body_mass_g, x = flipper_length_mm, color = species)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+From examining the plot, both penguins exhibit a strong positive relationship between flipper length and body mass. Gentoo penguins have longer flippers and weight more on average than Adelie penguins. It seems the length to weight relationship for Gentoo might be slightly stronger than Adelie as well.
+
+**b) Model** 
+
+Average penguin weights 3,500 - 4,500 grams
+
+```{r, results=FALSE}
+b0<-normal(4000, 250)
+b1<-normal(0,2.5,autoscale = TRUE)
+sigma<-exponential(1,autoscale=TRUE)
+penguin_model <-stan_glm(
+  body_mass_g ~ flipper_length_mm + species, family=gaussian,
+  data=penguin_data,
+  prior_intercept = b0,
+  prior=b1,
+  prior_aux = sigma,
+  chains=4, iter=5000*2, seed=84735
+)
+```
+
+**c) MCMC Diagnostics**
+
+```{r}
+mcmc_trace(penguin_model, size=0.1)
+
+mcmc_dens_overlay(penguin_model)
+
+mcmc_acf(penguin_model)
+
+neff_ratio(penguin_model)
+
+rhat(penguin_model)
+
+posterior_interval(penguin_model, prob=0.80)
+```
+
+**d) `tidy()` summary**
+
+```{r}
+tidy(penguin_model, effects = c("fixed", "aux"),
+     conf.int = TRUE, conf.level = 0.80) %>% 
+  select(-std.error)
+```
+
+**e) Posterior Prediction**
+Flipper length = 197
+```{r}
+weight_prediction <- posterior_predict(
+  penguin_model,
+  newdata = data.frame(flipper_length_mm=197,
+                       species=c("Adelie"))
+)
+
+mcmc_areas(weight_prediction) +
+  ggplot2::scale_y_discrete(labels = c("Adelie")) + 
+  xlab("weight(g)")
+```
+
+I find an Adelie penguin with 197mm flippers to weigh around 4000g with the range 3000-5000 plausible. 
+
+## 11.11
+
+**a) posterior simulation**
+
+Model: body_mass_g ~ flipper_length_mm + species + flipper_length_mm * species
+
+```{r, results=FALSE}
+penguin_interaction_model <- stan_glm(
+  body_mass_g ~ flipper_length_mm + species + flipper_length_mm*species,
+  family = gaussian,
+  data = penguin_data,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chains=4,iter=5000*2
+)
+
+```
+
+**b) posterior plausibilities plot**
+
+```{r eval=FALSE, results=FALSE}
+penguin_data %>%
+  add_fitted_draws(penguin_interaction_model, n = 50) %>%
+  ggplot(aes(x = flipper_length_mm, y = body_mass_g, color = species)) +
+    geom_line(aes(y = .value, group = paste(species, .draw)), alpha = 0.1)
+```
+
+**c)**
+```{r}
+tidy(penguin_interaction_model, effects = c("fixed", "aux"),
+     conf.int = TRUE, conf.level = 0.80)
+```
+I find evidence in favor of an interaction term. The estimated coefficient 90% credible interval range is significantly positive, suggesting that the association between flipper length and body mass is more significantly positive in Gentoo than Adelie penguins.
+
+## 11.12
+
+**a) Model**
+
+```{r, results=FALSE}
+penguin_model_3<-stan_glm(
+  body_mass_g ~ flipper_length_mm + bill_length_mm + bill_depth_mm,
+  family = gaussian,
+  data = penguin_data,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chains=4, iter=5000*2
+)
+```
+```{r}
+print(penguin_model_3)
+```
+
+**b) 95% Credible Interval**
+
+```{r}
+posterior_interval(penguin_model_3, .95)
+```
+All 3 explanitories have significantly positive relationships with body mass. Bill length is the most impactful, with a beta of high 60's and a relatively low standard deviation of around 10. Bill depth is most likely the second most impactful, but is widely spread, hence the relationship might waver penguin to penguin. Least impactful, but most consistent is flipper length. The coefficient estimate is tightly spread around 32. All ranges are contained above significantly above 0. 
+
+## 11.13
+
+**a) Models simulation**
+
+```{r, results=FALSE}
+model_1 <- stan_glm(
+  body_mass_g~flipper_length_mm,
+  family = gaussian, data = penguin_data,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma
+)
+
+model_2 <- stan_glm(
+  body_mass_g~species,
+  family = gaussian, data = penguin_data,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma
+)
+
+model_3 <- stan_glm(
+  body_mass_g~flipper_length_mm + species,
+  family = gaussian, data = penguin_data,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma
+)
+
+model_4 <- stan_glm(
+  body_mass_g~flipper_length_mm + bill_length_mm + bill_depth_mm,
+  family = gaussian, data = penguin_data,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma
+)
+```
+```{r}
+pp_check(model_1)
+
+pp_check(model_2)
+
+pp_check(model_3)
+
+pp_check(model_4)
+```
+
+
+The first model considering only flipper length does okay predicting weight, but is relatively unsure and has a wide spread around common weight values. The second model, which only considered species, over-predicts the bi-modalidty of the weight distribution and still has a wide spread. The third model, taking into account both flipper length and species, has a more concentrated spread of predictions around concentrated weights and sticks closer to the real data peaks than prior single explanatory models. The last model, which uses flipper length, bill length, bill depth, and ignores species, doesn't seem to capture the peaks of the real data as well as when species was considered.
+
+**c) 10-Fold Cross-Validation**
+
+```{r, include=FALSE}
+penguins_complete <- penguins_bayes %>% 
+  select(flipper_length_mm, body_mass_g, species, sex,
+         bill_length_mm, bill_depth_mm, year, island) %>% 
+  na.omit() 
+```
+
+```{r}
+
+val1 <- prediction_summary_cv(model=model_1, data=penguins_complete, k=10)
+val2 <- prediction_summary_cv(model=model_2, data=penguins_complete, k=10)
+val3 <- prediction_summary_cv(model=model_3, data=penguins_complete, k=10)
+val4 <- prediction_summary_cv(model=model_4, data=penguins_complete, k=10)
+
+modelValidation<- rbind(val1$cv,val2$cv,val3$cv,val4$cv)
+modelValidation["Model Number"] <- c("Model 1", "Model 2", "Model 3", "Model 4")
+print(modelValidation)
+```
+
+Models 3 and 4 appear to provide the best posterior predictions of body mass. Model 3 has the lowest mae and amoung the highest within 50 and 95, but model 4 has the lowest mae scaled. Model 2, which considered only species was by far and away the worst of the models.  
+
+**d) ELPD posterior predictive accuracy**
+
+```{r}
+loo_1 <- loo(model_1)
+loo_2 <- loo(model_2)
+loo_3 <- loo(model_3)
+loo_4 <- loo(model_4)
+
+loo_compare(loo_1, loo_2, loo_3, loo_4)
+```
+From an ELPD evaluation, model 4 is the best predictor by a significant margin. Models 1 and 3 are very similarly accurate, and as above, model 2 is the worst predictor.
+
+**e) The best model**
+
+In summary, the best model at predicting penguin weight was model 4, which took into account flipper length, bill length, and bill depth. Model 4's posterior predicitive accurary is significantly greater than the other 3 models because all other models ELPD's were more than five standard deviations less and it had the lowest `scaled_mae` and near lowest `mae`.
+
+
+## 11.14
+
+**- bill_length ~ body_mass + sex**
+```{r}
+ggplot(penguins_complete, aes(y = bill_length_mm, x = body_mass_g, color = species)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE)
+
+ggplot(penguins_complete, aes(y = bill_length_mm, x = sex, color = species)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r, results=FALSE}
+sd(penguins_complete$bill_length_mm)
+b0 <- normal(44.45, 5.46)
+
+myModel1 <- stan_glm(
+  bill_length_mm ~ body_mass_g + sex, 
+  family = gaussian,
+  data = penguins_complete,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chains=4,iter=5000*2
+)
+```
+```{r}
+
+
+print(myModel1)
+pp_check(myModel1)
+prediction_summary_cv(model = myModel1, data = penguins_complete, k = 10)
+```
+
+For my first model, I used body mass and sex as explanitories. It seems sex has a weak positive relationship between males and longer bills. From the `pp_check` it seems the model isn't capturing the data's bi-modality. I think this is stemming from not accounting for species so the body mass and sex look far more random because each penguin species has different averages for each explanatory. Body mass is estimated to have no relivance, I will leave it in and account for species to see if some meaning is uncovered. 
+
+**- bill_length ~ body_mass + sex + species**
+
+```{r, results=FALSE}
+myModel2 <- stan_glm(
+  bill_length_mm ~ body_mass_g + sex + species, 
+  family = gaussian,
+  data = penguins_complete,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chains=4,iter=5000*2
+)
+```
+
+```{r}
+print(myModel2)
+pp_check(myModel2)
+prediction_summary_cv(model = myModel2, data = penguins_complete, k = 10)
+```
+Accounting for species very significantly improves my model. The relationship between sex and bill length is twice as impactful as compared to when it was muddled by mixed species. Visually, the predicted models are now able to capture the bi-modality of the data much better, but the first peak seems to be underestimated, and the second overestimated. Numerically the `mae` halfed but `mae_scaled` barely budged. The `within_50` interval is significantly higher but `within_95` didn't change much, suggesting that the prediction spread decreased significantly by considering species. Body mass is still irrelevant so for the next iteration I will replace that with a different explanitory.
+
+**-bill_length ~ bill_depth + year + island + sex + species**
+
+```{r, results=FALSE}
+myModel3 <- stan_glm(
+  bill_length_mm ~ bill_depth_mm + year + sex + species + island + bill_depth_mm*sex,
+  family = gaussian,
+  data = penguins_complete,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chains=4,iter=5000*2
+)
+```
+
+```{r}
+print(myModel3)
+pp_check(myModel3)
+prediction_summary_cv(model = myModel3, data = penguins_complete, k = 10)
+```
+
+The last model is the best of the 3 by a significant margin. The `mae` decreased by 14%, the `mae_scaled` similarly fell by 14%. `Within_50` increased by 5%, and `within_95` by 1%. Visually the model better captures the peaks and troff of the data. 
