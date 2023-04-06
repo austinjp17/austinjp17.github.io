@@ -4,6 +4,8 @@
 
 # All Posts
 
+[About](about.md)
+
 Mar 18, 2019
 
 [Setup a custom domain for your github pages blog in five minutes](https://aregsar.com/blog/2019/how-to-setup-a-custom-domain-for-your-github-pages-blog-in-five-minutes)
