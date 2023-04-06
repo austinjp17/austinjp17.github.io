@@ -1,34 +1,38 @@
 ---
 title: "Poisson Regression Notes"
 author: "Austin Palmer"
-header-includes:
-  - \usepackage{amsmath}
-date: "2023-04-03"
-
+date: "2023-04-06"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 ```
+
 ## **Setup**
 
 ### Context
 
-Our goal is to better understand how the number of laws in a state relates to its unique demographic features and political climate. For the former, we’ll narrow our focus to the percentage of a state’s residents that reside in an urban area.For the latter, we’ll utilize historical voting patterns in presidential elections, noting whether a state has consistently voted for the Democratic candidate, consistently voted for the “GOP” Republican candidate, or is a swing state that has flip flopped back and forth.
+Our goal is to better understand how the number of laws in a state relates to its unique demographic features and political climate. For the former, we'll narrow our focus to the percentage of a state's residents that reside in an urban area.For the latter, we'll utilize historical voting patterns in presidential elections, noting whether a state has consistently voted for the Democratic candidate, consistently voted for the "GOP" Republican candidate, or is a swing state that has flip flopped back and forth.
 
 ### Variable Definitions
 
 For each state $i \subset \{1,2,...,50\}$:
 
-- $Y_i$: Number of anti-discrimination laws
+-   $Y_i$: Number of anti-discrimination laws
 
-- $X_{i1}$: Percentage of state residents living in urban areas
+-   $X_{i1}$: Percentage of state residents living in urban areas
 
-- $2^{nd}$ Predictor: 3 Level Categorical - Democrat, GOP, or Swing
-  
-  - *Democrat serves as baseline. The other levels, GOP and swing, enter the model as indicators*
-  
+-   $2^{nd}$ Predictor: 3 Level Categorical - Democrat, GOP, or Swing
+
+    -   *Democrat serves as baseline. The other levels, GOP and swing, enter the model as indicators*
+
+```{=tex}
 \begin{equation*}
   X_{i2} = 
   \begin{cases} 
@@ -36,7 +40,8 @@ For each state $i \subset \{1,2,...,50\}$:
       0 \text{ Otherwise} 
    \end{cases}
 \end{equation*}
-
+```
+```{=tex}
 \begin{equation*}
   X_{i3} = 
   \begin{cases} 
@@ -44,7 +49,7 @@ For each state $i \subset \{1,2,...,50\}$:
       0 \text{ Otherwise} 
    \end{cases}
 \end{equation*}
-
+```
 ## **Normal Approach**
 
 ```{r, include=FALSE}
@@ -67,15 +72,15 @@ $Y_i|\beta_0,\beta_1,\beta_2,\beta_3,\sigma \sim N(\mu_i, \sigma^2); \mu_i = \be
 
 ### Prior Knowledge
 
-- A typical state with respect to it's urban population and historical voting patterns has $\sim$ 7 laws
+-   A typical state with respect to it's urban population and historical voting patterns has $\sim$ 7 laws
 
-- $\beta_{0c} \sim Normal(7, 1.5^2)$
+-   $\beta_{0c} \sim Normal(7, 1.5^2)$
 
 ### Data Exploration
 
 **Descriptive Statistics**
 
-Each year, the Human Rights Campaign releases a "State Equality Index" which monitors the  **number of LQBTQ+ rights laws in each state.** Among other state features, the `equality_index` dataset in the `bayesrules` package includes data from the 2019 index.
+Each year, the Human Rights Campaign releases a "State Equality Index" which monitors the **number of LQBTQ+ rights laws in each state.** Among other state features, the `equality_index` dataset in the `bayesrules` package includes data from the 2019 index.
 
 ```{r}
 summary(equality$laws)
@@ -93,6 +98,7 @@ ggplot(equality, aes(x = laws)) +
   xlab("Number of Laws") +
   ylab("Count")
 ```
+
 From the histogram we can see that California, at 155 laws, is the high side outlier largely responsible for skewing the mean and median. As a clear outlier, this state will be removed from the analysis
 
 ```{r}
@@ -154,11 +160,11 @@ Under the Poisson structure, the *expected/average* number of laws, $Y_i$, in st
 
 $$ E(Y_i|\lambda_i) = \lambda_i $$
 
-If we were to proceed as in Normal Regression, we might assume the average number of laws is linear combination of our predictors, $\lambda_i = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \beta_3X_{i3}$. This assumption is illustrated by by the lines below, one per historical voting trend. 
+If we were to proceed as in Normal Regression, we might assume the average number of laws is linear combination of our predictors, $\lambda_i = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \beta_3X_{i3}$. This assumption is illustrated by by the lines below, one per historical voting trend.
 
 INSERT ILLUSTRATION
 
-When we assume that $\lambda_i$ can be expressed by a linear combination of X predictors, the model of $\lambda_i$ spans both positive and negative values, suggesting states can have a negative number of anti-discrimination laws. That's nonsensical. Like the number of laws, a Poisson rate $\lambda_i$, must be *positive*. 
+When we assume that $\lambda_i$ can be expressed by a linear combination of X predictors, the model of $\lambda_i$ spans both positive and negative values, suggesting states can have a negative number of anti-discrimination laws. That's nonsensical. Like the number of laws, a Poisson rate $\lambda_i$, must be *positive*.
 
 To avoid this violation, it is common to use a **log link function**. Meaning, we'll assume that $log(\lambda_i)$, which does span both positive and negative values, is a linear combo of the X predictors.
 
@@ -174,18 +180,17 @@ Consider the two equivalent formulations of the Poisson regression model: $Y|\be
 
 $$log(\lambda_i) = \beta_0 + \beta_1X_{1} + \beta_2X_{2} +... \beta_pX_{p}$$
 
-$$\lambda_i = e^{\beta_0 + \beta_1X_{1} + \beta_2X_{2} +... \beta_pX_{p}}$$
-**Interpreting $\beta_0$**
+$$\lambda_i = e^{\beta_0 + \beta_1X_{1} + \beta_2X_{2} +... \beta_pX_{p}}$$ **Interpreting** $\beta_0$
 
 When $X_1, X_2,...,X_p$ are all 0, $\beta_0$ is the logged baseline $Y$ value and $e^{\beta_0}$ is the baseline $Y$ value.
 
-**Interpreting $\beta_1, \beta_2,...,\beta_p$
+\*\*Interpreting $\beta_1, \beta_2,...,\beta_p$
 
 When we control for all other predictors and increase $X_1$ by 1:
 
-- $\beta_1$ is the logged average $Y$ value
+-   $\beta_1$ is the logged average $Y$ value
 
-- $e^{\beta_1}$ is the multiplicative change in the (unlogged) baseline $Y$ value.
+-   $e^{\beta_1}$ is the multiplicative change in the (unlogged) baseline $Y$ value.
 
 $$\beta_1 = log(\lambda_x+1) - log(\lambda_x) \hspace{10mm} \text{and} \hspace{10mm} e^{\beta_1} = \frac{\lambda_{x+1}}{\lambda_x}$$
 
@@ -195,21 +200,19 @@ The curves are defined by:
 
 $$ log(\lambda_i) = 2 + 0.03X_{i1} - 1.1X_{i2} - 0.6X_{i3}$$
 
-$$\lambda = e^{2 + 0.03X_{i1} - 1.1X_{i2} - 0.6X_{i3}}$$
-**Intercept Interpretation**
+$$\lambda = e^{2 + 0.03X_{i1} - 1.1X_{i2} - 0.6X_{i3}}$$ **Intercept Interpretation**
 
 $\beta_0 = 2$: This intercept reflects the trends in anti-discrimination laws in historically Democratic states with 0 urban population ($X_{i1}, X_{i2}, X_{i3} = 0$). Meaning we can expect the logged number of laws in such states to be 2. More meaningfully, we expect historically Democratic states with 0 urban population to have $\sim$ 7.4 anti-discrimination laws
 
-$$e^{\beta_0} = e^2 = 7.389$$
-**$\beta_1$ interpretation**
+$$e^{\beta_0} = e^2 = 7.389$$ $\beta_1$ interpretation
 
-$\beta_1 = 0.03$: No matter a state's historical voting trends, we expect *logged* number of laws in states to increase by 0.03 for every extra percentage point in urban population. If the urban population of one state is 1 percent greater than another state, we'd expect it to have 1.03 *times*, or 3\% more the number of anti-discrimination laws.
+$\beta_1 = 0.03$: No matter a state's historical voting trends, we expect *logged* number of laws in states to increase by 0.03 for every extra percentage point in urban population. If the urban population of one state is 1 percent greater than another state, we'd expect it to have 1.03 *times*, or 3% more the number of anti-discrimination laws.
 
 $$e^{\beta_1} = e^{0.03} = 1.03$$
 
-Though the model curves don't increase by the same *absolute* amount for each `percent_urban` increment, they do increase by the same *percentage*. Thus, $e^{\beta_1}$ measures the nonlinear *percentage* or *multiplicative* increase in the average number of laws with urban percentage. 
+Though the model curves don't increase by the same *absolute* amount for each `percent_urban` increment, they do increase by the same *percentage*. Thus, $e^{\beta_1}$ measures the nonlinear *percentage* or *multiplicative* increase in the average number of laws with urban percentage.
 
-**$\beta_2$ interpretation**
+$\beta_2$ interpretation
 
 $\beta_2 = -1.1$: When interpreting a coefficient for a categorical indicator, we must do so relative to the reference category, here Democrat leaning states. Thus, at any urban percentage, we'd expect the *logged* number of laws to be 1.1 lower in historically GOP states than Democrat states. Importantly, the difference isn't constant - the gap in number of laws widens as urban percentage increases. Thus, at any urban percentage level, we'd expect a historically GOP state to have $\frac{1}{3}$ as many anti-discrimination laws as a historically Democrat state:
 
@@ -217,39 +220,37 @@ $$e^{\beta_2} = e^{-1.1} = 0.333$$
 
 ### Assumptions
 
-Consider the Bayesian Poisson regression model with $Y_i|\beta_0,\beta_1,...,\beta_p \sim Pois(\lambda_i)$ st:
-$$log(\lambda_i) = \beta_0 + \beta_1X_{i1} + ... + \beta_pX_{ip}$$
+Consider the Bayesian Poisson regression model with $Y_i|\beta_0,\beta_1,...,\beta_p \sim Pois(\lambda_i)$ st: $$log(\lambda_i) = \beta_0 + \beta_1X_{i1} + ... + \beta_pX_{ip}$$
 
 The appropriateness of this model depends upon the following assumptions:
 
-- **Structure of the Data**
+-   **Structure of the Data**
 
-  Conditioned on predictors $X$, the observed data $Y_i$ on case $i$ is **independent** of the observed data on any other vase $j$
+    Conditioned on predictors $X$, the observed data $Y_i$ on case $i$ is **independent** of the observed data on any other vase $j$
 
-- **Structure of variable $Y$**
-  
-  Response variable $Y$ has a Poisson structure, i.e., is a discrete **count** of events that happen in a fixed interval of space or time
-  
-- **Structure of the relationship**
+-   **Structure of variable** $Y$
 
-  The *logged* average of $Y$ can be written as a **linear combination** of the predictors,
-  
-  $log(\lambda_i) = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \beta_3X_{i3}$
-  
-- **Structure of the variability in Y**
+    Response variable $Y$ has a Poisson structure, i.e., is a discrete **count** of events that happen in a fixed interval of space or time
 
-  A Poisson random variable $Y$ with rate $\lambda$ has equal mean and variance, $E(Y) = Var(Y) = \lambda$. Thus, conditioned on predictors   $X$, the *typical* value of $Y$ should be roughly equivalent to the *variability* in $Y$. As such, the variability in $Y$ increases as its   mean increases.
-  
+-   **Structure of the relationship**
+
+    The *logged* average of $Y$ can be written as a **linear combination** of the predictors,
+
+    $log(\lambda_i) = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2} + \beta_3X_{i3}$
+
+-   **Structure of the variability in Y**
+
+    A Poisson random variable $Y$ with rate $\lambda$ has equal mean and variance, $E(Y) = Var(Y) = \lambda$. Thus, conditioned on predictors $X$, the *typical* value of $Y$ should be roughly equivalent to the *variability* in $Y$. As such, the variability in $Y$ increases as its mean increases.
+
 ### Specifying The Priors
-  
-  To complete our Bayesian model, we must express our prior understanding of regression coefficients. Since these coefficients can take on    any real value, it's again reasonable to utilize Normal priors. Further, as was the case for our Normal regression, we'll assume these      priors are **independent**. 
-  
-  The complete representation of our **Poisson regression model** of $Y_i$ is as follows:
-  
-$$\text{data:}\hspace{5mm} Y_i|\beta_0,\beta_1,\beta_2,\beta_3 \sim Pois(\lambda_i) \hspace{5mm}\text{st:}\hspace{5mm} log(\lambda_i) = \beta_0 + \beta_{i1} + \beta_2X_{i2} + \beta_3X_{i3}$$
-$$\text{priors: }\\ \beta_{0c} \sim Normal(2, 0.5^2) \\ \beta_1 \sim Normal(0, 0.17^2) \\ \beta_2 \sim Normal(0, 4.97^2) \\ \beta_3 \sim Normal(0, 5.60^2) $$
 
-First, consider the prior for the centered intercept $\beta_{0c}$. Recall our prior assumption that the average number of laws in a "typical" state is around 7. As such, we set thhe Normal prior mean for $\beta_{0c} to 2 on the *log* scale. Beyond this baseline, we again employ weakly informative default priors, tuned by `stan_glm()` below.
+To complete our Bayesian model, we must express our prior understanding of regression coefficients. Since these coefficients can take on any real value, it's again reasonable to utilize Normal priors. Further, as was the case for our Normal regression, we'll assume these priors are **independent**.
+
+The complete representation of our **Poisson regression model** of $Y_i$ is as follows:
+
+$$\text{data:}\hspace{5mm} Y_i|\beta_0,\beta_1,\beta_2,\beta_3 \sim Pois(\lambda_i) \hspace{5mm}\text{st:}\hspace{5mm} log(\lambda_i) = \beta_0 + \beta_{i1} + \beta_2X_{i2} + \beta_3X_{i3}$$ $$\text{priors: }\\ \beta_{0c} \sim Normal(2, 0.5^2) \\ \beta_1 \sim Normal(0, 0.17^2) \\ \beta_2 \sim Normal(0, 4.97^2) \\ \beta_3 \sim Normal(0, 5.60^2) $$
+
+First, consider the prior for the centered intercept $\beta_{0c}$. Recall our prior assumption that the average number of laws in a "typical" state is around 7. As such, we set thhe Normal prior mean for \$\beta\_{0c} to 2 on the *log* scale. Beyond this baseline, we again employ weakly informative default priors, tuned by `stan_glm()` below.
 
 To examine if these combined priors accurately reflect our uncertain understanding of state laws, we'll simulate 20,000 draws from the prior models of ($\beta_0, \beta_1, \beta_2, \beta_3$). To this end, we can run the same `stan_glm()` used to simulate the posterior with two new arguments: `prior_PD = TRUE`, which specifies that we wish to simulate the *prior*, and `family = poisson`, to indicate we're using a Poisson data model.
 
@@ -265,12 +266,15 @@ equality_model_prior <- stan_glm(laws~percent_urban + historical,
                                  chains = 4, iter = 5000*2, seed = 84735,
                                  prior_PD = TRUE)
 ```
+
 A call to `prior_summary` confirms the specification of our weakly informative priors
+
 ```{r}
 prior_summary(equality_model_prior)
 ```
 
-Next we plot 100 prior plausible models, $e^{\beta_0 + \beta_1x_1 + \beta_2x_2 + \beta_3x_3}.
+Next we plot 100 prior plausible models, \$e\^{\beta\_0 + \beta\_1x_1 + \beta\_2x_2 + \beta\_3x_3}.
+
 ```{r, warning=FALSE}
 equality %>%
   add_fitted_draws(equality_model_prior, n=100) %>%
@@ -283,12 +287,12 @@ The mess of curves reflects our prior uncertainty. The lines are all over the ma
 
 ### Simulating the Posterior
 
-
 ```{r Poisson Posterior Build, results=FALSE}
 equality_model <- update(equality_model_prior, prior_PD = FALSE)
 ```
 
 MCMC trace, density, and autocorrelation plots confirm that our simulation has stabilized:
+
 ```{r}
 mcmc_trace(equality_model)
 mcmc_dens_overlay(equality_model)
@@ -296,12 +300,15 @@ mcmc_acf(equality_model)
 ```
 
 A quick posterior predictive check also confirms we're now on the right track:
+
 ```{r}
 set.seed(1)
 pp_check(equality_model, plotfun = "hist", nreps = 5) + 
   xlab("laws")
 ```
-Histograms of just five posterior simulations of state law data exhibit similar skew, range, and trends as the observed data. 
+
+Histograms of just five posterior simulations of state law data exhibit similar skew, range, and trends as the observed data.
+
 ```{r}
 pp_check(equality_model)+
   xlab("laws")
@@ -336,19 +343,19 @@ $$ log(\lambda_i) = 1.71 + 0.0164X_{i1} - 1.52X_{i2} - 0.61X_{i3} $$
 
 $$ \lambda_i = e^{1.71 + 0.0164X_{i1} - 1.52X_{i2} - 0.61X_{i3}} $$
 
-**$\beta_1$ interpretation**
+$\beta_1$ interpretation
 
 Consider the `percent_urban` coefficient $\beta_1$, which has a posterior median of roughly 0.0164. Then, when controlling for `historical` voting trends, we expect the *logged* number of anti-discrimination laws in states to increase by 0.0164 for every extra percentage point in urban population. More meaningfully, if the urban population in one state is 1 percent higher than another, we'd expect it to have 1.0165 *times* the number of, or 1.65% more, anti-discrimination laws:
 
 $$ e^{0.0164} = 1.165$$
 
-Or, if the urban population in one state in 25\% greater than another, we'd expect it to have roughly *one and a half* times the number of, or 51\% more, anti-discrimination laws ($e^{25*0.0164} = 1.5068$).
+Or, if the urban population in one state in 25% greater than another, we'd expect it to have roughly *one and a half* times the number of, or 51% more, anti-discrimination laws ($e^{25*0.0164} = 1.5068$).
 
 ### Posterior Prediction
 
 **Prediction using `posterior_predict()` Shortcut**
 
-To explore how the general Poisson model plays out in individual states, consider Minnesota, a historically `dem` state with 73.3\% of residents living in urban areas, and 4 anti-discrimination laws:
+To explore how the general Poisson model plays out in individual states, consider Minnesota, a historically `dem` state with 73.3% of residents living in urban areas, and 4 anti-discrimination laws:
 
 ```{r}
 equality %>%
@@ -374,13 +381,13 @@ The resulting posterior predictive model anticipates that Minnesota has between 
 
 Instead of using `posterior_predict()`, we could directly predict the number of laws in Minnesota from each of the 20,000 plausibilities. To this end we:
 
-1) Calculate the logged average number of laws in states like Minnesota, with a 73.3\% urban percentage and historically Democrat voting patterns:
+1)  Calculate the logged average number of laws in states like Minnesota, with a 73.3% urban percentage and historically Democrat voting patterns:
 
 $$log(\lambda^i) = \beta_0^i + \beta_1^i * 73.3 + \beta_2^i * 0 + \beta_3^i * 0$$
 
-2) Transform $log(\lambda^i)$ to obtain unlogged average of number of laws in states like Minnesota
+2)  Transform $log(\lambda^i)$ to obtain unlogged average of number of laws in states like Minnesota
 
-3) Simulate a Pois($\lambda^i$) outcome for the number of laws in Minnesota, $Y^i_{new}, using `rpois()`
+3)  Simulate a Pois($\lambda^i$) outcome for the number of laws in Minnesota, \$Y\^i\_{new}, using `rpois()`
 
 ```{r}
 set.seed(84735)
@@ -399,18 +406,18 @@ The results matches that of `posterior_predict()`, so we can be confident in the
 
 Lets evaluate the quality of our Poisson regression model of anti-discrimination laws through 3 questions:
 
-1) **How fair is our model?**
-  
-  Though we don't believe there to be bias in the data collection process, it would be unfair to use the general state-level trends revealed   in our analysis to make assumptions about individuals based on their voting behavior or where they live. Further, an analysis of the        number of state laws don't reflect the quality of those laws.
-  
-2) **How wrong is our model?**
+1)  **How fair is our model?**
 
-  Our ``pp_check()` earlier demonstrated that our Poisson regression assumptions are reasonable
-  
-3) **How accurate are our model predictions?**
-  
-  As we did or the state of Minnesota, we can examine the posterior predictive models for each of the 49 states in our dataset. The plot      below illustrates the posterior predictive credible intervals for the number of laws in each state alongside the actual observed data.
-  
+Though we don't believe there to be bias in the data collection process, it would be unfair to use the general state-level trends revealed in our analysis to make assumptions about individuals based on their voting behavior or where they live. Further, an analysis of the number of state laws don't reflect the quality of those laws.
+
+2)  **How wrong is our model?**
+
+Our \``pp_check()` earlier demonstrated that our Poisson regression assumptions are reasonable
+
+3)  **How accurate are our model predictions?**
+
+As we did or the state of Minnesota, we can examine the posterior predictive models for each of the 49 states in our dataset. The plot below illustrates the posterior predictive credible intervals for the number of laws in each state alongside the actual observed data.
+
 ```{r}
   #Simulate posterior predictive models for each state
   set.seed(84735)
@@ -434,7 +441,7 @@ We can formalize our observations above using `prediction_summary()`.
 prediction_summary(model = equality_model, data = equality)
 ```
 
-Across the 49 states in our study, the observed numbers of anti-discrimination laws tend to fall only 3.4 laws, or 1.3 posterior standard deviations, from their posterior mean predictions. Given the number of state laws, from 1 to 38, a typical prediction error of 3.4 seems pretty good! Countering this positive with a negative, the observed number of laws for only roughly 78\% of the states fall within their corresponding 95\% posterior prediction interval. This means that our posterior predictive models "missed" or didn't anticipate the number of laws in 22\%, of 11, of the 49 states.
+Across the 49 states in our study, the observed numbers of anti-discrimination laws tend to fall only 3.4 laws, or 1.3 posterior standard deviations, from their posterior mean predictions. Given the number of state laws, from 1 to 38, a typical prediction error of 3.4 seems pretty good! Countering this positive with a negative, the observed number of laws for only roughly 78% of the states fall within their corresponding 95% posterior prediction interval. This means that our posterior predictive models "missed" or didn't anticipate the number of laws in 22%, of 11, of the 49 states.
 
 For due diligence, we also calculate the *cross-validated* posterior predictive accuracy in apply this model to a "new" set of 50 states, or the *same* set of 50 states under the recognition that our current data is just a andom snapshot in time.
 
@@ -447,3 +454,4 @@ poisson_cv
 ```
 
 In this case the results are similar, suggesting our model is **not** overfit to our sample data - we expect it to perform just as well at predicting "new" states.
+
