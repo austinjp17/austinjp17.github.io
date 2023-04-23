@@ -1,0 +1,95 @@
+:root{
+    --highlight_outline: #01cbfe;
+    --highlight_fill: hsla(192, 99%, 50%, 0.169);
+    --quiz_outline:#8d0000;
+    --quiz_fill:hsla(0, 100%, 22%, 0.22);
+    
+    /*DARK MODE*/
+    --dm-bg:rgb(23,23,23);
+    --dm-text: rgb(255,255,255,.87);
+    
+    --dm-toc:rgb(50,50,50);
+}
+
+body {
+    background-color: var(--dm-bg);
+    color:var(--dm-text)
+}
+
+/* strong {
+    font-weight: 500;
+} */
+
+
+p {
+    font-family: 'Roboto', sans-serif;
+}
+
+h1 {
+    border-bottom: solid var(--highlight_outline) 3px;
+    border-top: solid var(--highlight_outline) 3px;
+    border-radius: 5px;
+    padding-top: .25rem;
+    padding-bottom: .25rem;
+}
+
+h2 {
+    font-weight: 600;
+}
+
+.title{
+    border-bottom: solid var(--highlight_outline) 0px !important;
+    border-top: solid black 0px !important;
+}
+
+/*h5 repurposed for quiz backdrop*/
+h5{
+    font-weight: 700;
+    font-size: 16px;
+    text-decoration: underline;
+}
+.level5{
+    border-top: solid var(--quiz_outline) 2px;
+    border-bottom: solid var(--quiz_outline) 2px;
+    border-radius: 10px;
+    background-color: var(--quiz_fill);
+    padding:1rem;
+    margin-top: .5rem;
+}
+
+/* h6 Repurposed as translusent backdrop */
+h6 {
+    font-weight: 700;
+    font-size: 16px;
+    text-decoration: underline;
+}
+
+/* level6 points to div class name gen by h6 */
+.level6 {
+    border-top: solid var(--highlight_outline) 2px;
+    border-bottom: solid var(--highlight_outline) 2px;
+    border-radius: 10px;
+    background-color: var(--highlight_fill);
+    padding:1rem;
+}
+
+
+#TOC > ul.tocify-header > li:first-child {
+    text-indent: initial;
+    padding-left: 1em;
+  }
+  
+#TOC ul.tocify-subheader[data-tag="2"] > li.tocify-item {
+text-indent: initial;
+padding-left: 2em;
+}
+
+#TOC ul.tocify-subheader[data-tag="3"] > li.tocify-item {
+text-indent: initial;
+padding-left: 3em;
+}
+
+#TOC ul.tocify-subheader[data-tag="4"] > li.tocify-item {
+text-indent: initial;
+padding-left: 4em;
+}

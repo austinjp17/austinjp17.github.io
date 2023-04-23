@@ -1,0 +1,65 @@
+:root {
+    --dm-inline-code-bg: rgba(163, 42, 255, .44);
+    --dm-code_bg:rgba(203, 203, 203, 0.838);
+    --dm-code-res-bg:rgba(50,50,50);
+    --dm-code-res-text: rgba(255,255,255,.87);
+    --dm-comments: rgb(33, 33, 33);
+    --dm-code-btn-clp: rgb(59, 59, 59);
+    --dm-code-btn-hilt: rgb(18, 152, 200);
+}
+
+/*code folding button*/
+.code-folding-btn {
+  background-color:var(--dm-code-btn-clp);
+  border-radius: 8px;
+  border-style: none;
+  box-sizing: border-box;
+  color: #FFFFFF;
+  cursor: pointer;
+  display: inline-block;
+  font-family: "Haas Grot Text R Web", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  height: 40px;
+  line-height: 20px;
+  list-style: none;
+  margin: 0;
+  outline: none;
+  padding: 10px 12px;
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+  transition: color 100ms;
+  vertical-align: baseline;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+
+}
+.code-folding-btn:hover,
+.code-folding-btn:focus {
+  background-color: var(--dm-code-btn-hilt);
+}
+
+
+/*inline*/
+code {
+    background-color: var(--dm-inline-code-bg);
+}
+
+
+/*Code blocks*/
+pre {
+    background-color: var(--dm-code_bg);
+}
+
+/*Code Result Blocks*/
+pre:not([class]) {
+    background-color: var(--dm-code-res-bg);
+    color: var(--dm-code-res-text);
+}
+
+/*Comments*/
+.hljs-comment {
+    color: var(--dm-comments)
+}

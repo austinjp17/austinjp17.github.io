@@ -1,0 +1,253 @@
+---
+title: "Poisson Homework 7"
+author: "Austin Palmer"
+date: "2023-04-06"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### **12.1**
+
+a)  If we were to model the number of cups of coffee bought by an individual it would be better fit by a Poisson distribution because it's discrete and can only take values equal to or greater than 0.
+
+b)  A log link function allows us to define a non-linear average predictors value by wrapping the expected outcome given predictors in a $log()$ and interpreting it as percent change instead of absolute change.
+
+c)  It also allows us to interpret below 0 average outcomes for data bounded at or above 0.
+
+d)  
+
+    1)  Structure of the Data: $Y_i$ is independent of any other $Y_j$
+
+    2)  Structure of Variable $Y$: Response variable $Y$ is a discrete count of events that happen in a fixed interval of time or space
+
+    3)  Structure of the relationship: The logged average of $Y$ can be written as a linear combination of the predictors
+
+    4)  Structure of Variability in $Y$: Equal mean and variance
+
+#### **12.2: (Poisson versus Negative Binomial)** Specify whether Poisson regression, Negative Binomial regression, both, or neither fit with each situation described below.
+
+a)  The response variable is a count.
+
+    Both
+
+b)  The link is a log.
+
+    Both
+
+c)  The link is the identity.
+
+    Neither
+
+d)  We need to account for overdispersion.
+
+    Negative Binomial
+
+e)  The response is a count variable, and as the expected response increases, the variability also increases.
+
+    Poisson
+
+#### **12.5**
+
+a)  
+
+```{r, include=FALSE}
+# Load Packages
+library(bayesrules)
+library(rstanarm)
+library(bayesplot)
+library(tidyverse)
+library(tidybayes)
+library(broom.mixed)
+
+# Load data
+data(bald_eagles)
+sightings <- bald_eagles
+
+
+```
+
+```{r}
+summary(sightings$count)
+sd(sightings$count)
+ggplot(sightings, aes(x = count)) + 
+  geom_histogram(color = "white", breaks = seq(-1, 12, by = 1)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  ggtitle("Frequency of Eagle Sightings") +
+  xlab("Number of Sightings") +
+  ylab("Count")
+```
+
+From the summary stats we can see that our data ranges from 0 to 12, with an overweight mean to median ratio, implying outliers to the high side and/or grouping to the low side. Examining the histogram count frequency graph we can see those patterns emerge. There were only 3 years where eagles were seen at least 8 times. On average eagles were seen about 2 times per year.
+
+b)  
+
+```{r}
+ggplot(sightings, aes(y = count, x = year)) +
+  geom_point(size=3)
+```
+
+In examining the relationship between year and count, we can see a pretty stagnant trend until 2000, where a pretty clear upward trend start to pick up. Additionally the variability seems to increase as the count becomes higher.
+
+c)  
+
+```{r}
+ggplot(sightings, aes(y = count, x = year, color=hours)) +
+  geom_point(size=3)
+```
+
+Including hours of observation in our analysis gives another clear trend. As hours of observation increase, the expected sightings also increase.
+
+#### **12.6: Normal Model**
+
+a)  
+
+```{r, results=FALSE}
+b0<-normal(3, 3, autoscale = TRUE)
+b1<-normal(0, 2.5, autoscale = TRUE)
+sigma<-exponential(1, autoscale=TRUE)
+
+normal_model <- stan_glm(
+  count ~ year + hours,
+  data = sightings, family=gaussian,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chain=4, iter = 5000*2, seed = 84735
+)
+
+```
+
+```{r}
+prior_summary(normal_model)
+```
+
+b)  
+
+$$\text{data:}\hspace{5mm} Y_i|\beta_0,\beta_1,\beta_2 \sim Normal(\mu_i, \sigma^2) \hspace{5mm}\text{st:}\hspace{5mm} \mu_i = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2}$$
+
+$$\text{priors:} \\ \beta_0 \sim Normal(3, 9.1^2) \\ \beta_1 \sim Normal(2.5,2.5^2) \\ \beta_2 \sim Normal(0.7, 0.24^2) \\ \sigma \sim exponential(0.33)$$
+
+c)  
+
+```{r}
+pp_check(normal_model)
+```
+
+Examining sample posterior predictions it seems our model is not very good. Our normal model is much more symmetrical than the observed data. It fails to capture asymmetrical right tail and left peak displayed by the observed. Additionally, the normal model predicts negative numbers, which isn't possible.
+
+#### **12.7: Poisson Model**
+
+a)  A Poisson regression would better capture the data's asymmetric skew.
+
+b)  
+
+```{r Poisson Model, results=FALSE}
+b0<-normal(3, 3, autoscale = TRUE)
+b1<-normal(0, 2.5, autoscale = TRUE)
+
+poisson_model <- stan_glm(
+  count ~ year + hours,
+  data = sightings, family=poisson,
+  prior_intercept = b0,
+  prior = b1,
+  chain=4, iter = 5000*2, seed = 84735
+)
+```
+
+```{r}
+prior_summary(poisson_model)
+```
+
+c)  
+
+$$\text{data:}\hspace{5mm} Y_i|\beta_0,\beta_1,\beta_2 \sim Pois(\lambda_i) \hspace{5mm}\text{st:}\hspace{5mm} \log(\lambda_i) = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2}$$
+
+$$\text{priors:} \\ \beta_0 \sim Normal(3, 3^2) \\ \beta_1 \sim Normal(2.5,2.5^2) \\ \beta_2 \sim Normal(0.23, 0.08^2) \\ $$
+
+d)  
+
+```{r}
+
+pp_check(poisson_model)
+```
+
+This model is much better than the normal model. First, our model only predicts numbers equal to or greater than 0, which fits our data much better. Additionally, the Poisson regression reflects the observed data skew much better than the normal model, capturing both the left peak and right tail.
+
+#### **12.8: NegBin Model**
+
+a)  
+
+```{r NegBin Model Build, results=FALSE}
+b0<-normal(3, 3, autoscale = TRUE)
+b1<-normal(0, 2.5, autoscale = TRUE)
+sigma<-exponential(1, autoscale=TRUE)
+
+negBin_model <- stan_glm(
+  count ~ year + hours,
+  data = sightings, family=neg_binomial_2,
+  prior_intercept = b0,
+  prior = b1,
+  prior_aux = sigma,
+  chain=4, iter = 5000*2, seed = 84735
+)
+```
+
+```{r NegBin}
+pp_check(negBin_model)
+```
+
+b)  NegBin Model Definition
+
+$$\text{data:}\hspace{5mm} Y_i|\beta_0,\beta_1,\beta_2 \sim NegBin(\mu, r) \hspace{5mm}\text{st:}\hspace{5mm} \log(\mu_i) = \beta_0 + \beta_1X_{i1} + \beta_2X_{i2}$$
+
+$$\text{priors:} \\ \beta_0 \sim Normal(-1.54, 36.0^2) \\ \beta_1 \sim Normal(.08,0.01^2) \\ \beta_2 \sim Normal(.0049, 0.0057^2) \\ r \sim exponential(1)$$
+
+c)  Coefficient Interpretation
+
+```{r}
+tidy(negBin_model, conf.int = TRUE, conf.level = 0.80)
+```
+
+-   $\beta_1 \approx 0.08$ ($e^{0.08} = 1.08$): When controlling for observation hours, each additional year one could expect to see 8% more eagles sightings. The relationship is significant - the 80% posterior credible interval for $\beta_1$ is comfortably above 0. Perhaps we are learning where to look.
+
+-   $\beta_2 \approx 0.0049$ ($e^{0.0049} = 1.005$): When controlling for the year, we find no significant relationship between observation hours and eagle sightings - the 80% credible interval for $\beta_2$ contains 0 and is very small in magnitude and variation.
+
+#### **12.9: Model Evaluation**
+
+**a) How Fair is the Model?**
+
+There is no bias in the data collection process
+
+**b) How Wrong is the Model?**
+
+The posterior predictions check above demonstrated the assumptions for a negative binomial model are reasonable
+
+**c) How accurate are the models predictions?**
+
+```{r}
+# Simulate posterior predictive models for each state
+set.seed(84735)
+negBin_predictions <- posterior_predict(negBin_model, newdata = bald_eagles)
+
+# Plot the posterior predictive models for each state
+ppc_intervals_grouped(bald_eagles$count, yrep = negBin_predictions, 
+                      x = bald_eagles$year, 
+                      group = bald_eagles$hours,
+                      prob = 0.5, prob_outer = 0.95,
+                      facet_args = list(scales = "fixed"))
+
+prediction_summary(model=negBin_model, data=bald_eagles)
+
+```
+
+Across the 37 years in our study, the observed eagle count tends to fall only 1.01 eagles, or 0.51 standard deviations, away from their posterior mean predictions. Given that our response variable ranges from 0 - 12, a typical prediction error of 1 seems pretty reliable. Additionally, all of the observed count values by year fall into their respective 95\% posterior prediction interval, meaning that our model anticipated the count for all years.
+
+```{r negBin Cross Validation}
+prediction_summary_cv(model = negBin_model, data = bald_eagles, k=10)
+```
+
+Running a cross-validated prediction summary, we see similar results, suggesting that the model is not overfitting to the sample data and that it should predict "new" years just as accurately.

@@ -1,0 +1,334 @@
+---
+title: "Homework 8"
+author: "Austin Palmer"
+date: "2023-04-19"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(bayesplot)
+library(bayesrules)
+library(tidybayes)
+library(tidyverse)
+library(rstanarm)
+library(dplyr)
+library(magrittr)
+library(knitr)
+library(ggplot2)
+library(broom)
+library(broom.mixed)
+data("big_word_club")
+```
+
+
+## **15.1**
+
+### A)
+
+Complete Pooling: This is an approach to modeling grouped data where all observations in a group/dataset are combined into one average value. The data is treated as coming from the same entity, and their individual differences are ignored. 
+  
+### B) 
+
+No Pooling: Each observation in a group/dataset is treated as a distinct entity and accounted for in the model with a predictor variable.
+  
+### C) 
+
+Partial Pooling: In between complete and no pooling, some level of data combination is used but groups are still allowed to have some degree of individuality and defining characteristics. 
+  
+  
+## **16.1**
+
+  Red: Complete Pooled
+  
+  Blue: No Pooled
+  
+  Green: Hierarchical
+  
+  ![]("C:\Users\littl\projects\My_Website\decompiled_notes\working_dir\pools.png")
+  
+## **16.6**: Applied Exercises
+
+
+```{r}
+big_word_club <- big_word_club %>% 
+  filter(treat == 1) %>% 
+  select(school_id, score_pct_change) %>% 
+  na.omit()
+```
+
+### A)
+
+```{r}
+head(big_word_club, 5)
+
+length(unique(big_word_club$school_id))
+```
+   26 schools
+  
+### B) 
+
+Range in num of student participates per school
+  
+```{r}
+school_stu_counts <-big_word_club %>%
+  group_by(school_id) %>%
+  count(school_id)
+
+summary(school_stu_counts[2])
+sapply(school_stu_counts[2], sd, na.rm=TRUE)
+
+```
+
+  The number of students per participating school ranges between 12 and 17 with a standard deviation of 1.3 students. The mean and median are less than half a deviation apart suggesting the number of students per school could be appropriately described with a normal distribution.
+  
+### C)
+
+```{r}
+avg_school_improv <- big_word_club %>%
+  group_by(school_id) %>%
+  summarize(count = n(), score_pct_change = mean(score_pct_change))
+
+avg_school_improv %>%
+  slice(1:2, 25:26)
+```
+
+  On average students at school id 2 displayed the largest score improvement (15.77%) and school id 44 the least at 2.45%
+
+### D)
+  
+```{r}
+ggplot(big_word_club, aes(x=school_id, y=score_pct_change)) +
+  geom_boxplot()
+
+```
+
+The boxplot illustrates the degree to which some schools tend to improve more than others, as well as the variability in score improvements between students at the same school. We can see the groups are somewhat similar in mean, with nearly all being between 5 and 15, but the variability school to school swings wildly. School schools like $i$ = 25 exhibit high consistency in score improvements and others like $j$ = 9 range well more than double the 25th school.
+
+## **16.7**
+
+### A)
+
+If we were to use a complete pooled approach we would have to define a global average score change parameters, resulting in the lose of individual characteristics of each school. Taking this route would leave us unable to compare and contrast within-school variability. Additionally, forcing this data to be fit by complete pool model would violate the model's independent observations assumption since we could expect students at the same school to exhibit similar features. On the other end of the extreme, using a no pooling model would leave us unable to generalize and predict for any school unconstrained in the sample. Additionally, the no pooling approach assumes that groups don't contain relevant information about one another, which could expect to be false since school material is very similar across schools, and would leave us unable to analyze the between-school variability. Modeling this data with a a hierarchical model allows us to examine both between- and within-group variability, and would take weight both the global mean and group mean into it's predictions.
+ 
+### B)
+
+$\mu$ represents the average global score change in percent across all schools while $\mu_j$ represents a specific school's average score change in percent across their respective sample students.
+ 
+### C)
+
+$\sigma_y$ represents the within-group variability, i.e., the standard deviation between student scores within each school. $\sigma_\mu$ on the other hand, represents the between-group variability, i.e., the standard deviation in mean student score changes between schools.
+ 
+## **16.8**
+ 
+### A)
+ 
+```{r, results=FALSE}
+b0<-normal(8, 2.5, TRUE)
+sigma<-exponential(1,TRUE)
+
+scores_hierarchical_model <- stan_glmer(
+score_pct_change ~ (1 | school_id),
+data=big_word_club, family = gaussian,
+prior_intercept = b0,
+prior_aux = sigma,
+prior_covariance = decov(reg=1, conc=1, shape=1, scale=1),
+chains=4, iter=5000*2, seed=84735
+)
+
+prior_summary(scores_hierarchical_model)
+```
+
+### B)
+
+```{r}
+mcmc_trace(scores_hierarchical_model)
+```
+
+The trace plots appear to be stable and mixing well
+
+```{r}
+mcmc_dens_overlay(scores_hierarchical_model)
+```
+All density overlays very similar, adding additional support that our model is fitting and mixing well.
+
+```{r}
+mcmc_acf(scores_hierarchical_model)
+```
+
+
+  All autocorrelation plots fall to 0 by the 5th step, supporting stabilization and a good mix.
+  
+### C)
+  
+```{r}
+  pp_check(scores_hierarchical_model)
+```
+Visually checking the posterior predictive check confirms that our hierarchical model isn't too wrong when it comes to capturing variability in score changes.
+
+## **16.9**
+
+### A)
+  
+```{r}
+tidy(scores_hierarchical_model, effects = "fixed",
+     conf.int = TRUE, conf.level = 0.80)
+```
+
+  Per the results, there's an 80% chance that the average school percentage score change is between 4.95 and 7.69.
+  
+### B)
+
+There is ample evidence to say that on average, student vocabulary levels improve throughout the vocabulary program. The 80% credible posterior median for global $\mu$ is significantly positive and well above 0.
+  
+### C)
+  
+```{r}
+  tidy(scores_hierarchical_model, effects="ran_pars")
+  2.88^2/(2.88^2+16.94^2)
+```
+
+The posterior median of $\sigma_y$ suggests that within any given school, percent score changes tend to vary by 2.88 from student to student. The between standard deviation tends to be much higher at around 16.94, interpreted as the mean percent score change tends to vary by 16.94 from school to school. From these values we find that the percent changes in score by students of the same school tend to have have very little correlation near 0.03. This can be interpreted to mean that 3% of the variation in percent score change is explained by differences between schools, whereas 97% is explained by differences among the students within each school.
+
+## **16.10**
+
+### A)
+
+```{r}
+# Get MCMC chains for each mu_j
+score_chains <- scores_hierarchical_model %>%
+  spread_draws(`(Intercept)`, b[,school_id]) %>% 
+  mutate(mu_j = `(Intercept)` + b) 
+
+# Get posterior summaries for mu_j
+score_summary_scaled <- score_chains %>% 
+  select(-`(Intercept)`, -b) %>% 
+  mean_qi(.width = 0.80) %>% 
+  mutate(school_id = fct_reorder(school_id, mu_j))
+
+# Check out the results
+ggplot(score_summary_scaled, 
+       aes(x = school_id, y = mu_j, ymin = .lower, ymax = .upper)) +
+  geom_pointrange() +
+  xaxis_text(angle = 90, hjust = 1)
+```
+
+Plotting 80% posterior credible intervals for all schools in our sample we can see that $\mu_j$ varies much more in location than by scale. Most schools have a similar range credible range of mean scores by students but their mean, $\mu_j$, varies significantly school to school.
+
+### B)
+
+```{r}
+j10 <- score_summary_scaled[which(score_summary_scaled$school_id == "school_id:10"),]
+j10
+ggplot(j10, 
+       aes(x = school_id, y = mu_j, ymin = .lower, ymax = .upper)) +
+  geom_pointrange() +
+  xaxis_text(angle = 90, hjust = 1)
+```
+
+  For $\mu_10$, we are 80% sure `school_id=25` has a mean average student percent score change between 3.45 and 9.28.
+
+### C)
+
+There is not ample evidence that on average vocab scores at school 10 improved by more than 5%. Although 5 in contained in the credible interval and is 3.5 is the lower bound so it's very plausible that vocab scores at School 10 will improve less than 5% during the program.
+  
+## **16.11**
+
+### A)
+  
+  **School 6**
+  
+```{r, results=FALSE}
+sch6 <- score_summary_scaled[which(score_summary_scaled$school_id == "school_id:6"),]
+sch17 <- score_summary_scaled[which(score_summary_scaled$school_id == "school_id:17"),]
+
+scores_df <- as.data.frame(scores_hierarchical_model)
+sch6_chains <- scores_df %>%
+  rename(b = `b[(Intercept) school_id:6]`) %>% 
+  select(`(Intercept)`, b, sigma) %>% 
+  mutate(mu_6 = `(Intercept)` + b,
+         y_6 = rnorm(20000, mean = mu_6, sd = sigma))
+
+```
+
+```{r}
+# Check it out
+head(sch6_chains, 6)
+```
+
+  **Bayes Prep**
+  
+```{r, results=FALSE}
+bayes_chains <- scores_df %>%
+  mutate(sigma_mu = sqrt(`Sigma[school_id:(Intercept),(Intercept)]`),
+         mu_bayes = rnorm(20000, `(Intercept)`, sigma_mu),
+         y_bayes = rnorm(20000, mu_bayes, sigma))
+```
+
+```{r}
+# Check it out
+head(bayes_chains, 6)
+```
+
+### B)
+  
+```{r}
+# Posterior summary of Y_new,j
+sch6_chains %>% 
+  mean_qi(y_6, .width = 0.80) 
+```
+  The 80% posterior predictive interval of $Y_{new,j}$ for School 6 is centered at 4.62 and ranges from -17.13 to 26.49.
+
+```{r}
+# Posterior summary of Y_new,j
+bayes_chains %>% 
+  mean_qi(y_bayes, .width = 0.80) 
+
+```
+
+The 80% posterior predictive interval of $Y_{new,j}$ for Bayes Prep is centered at 6.26 and ranges from -15.58 to 28.09. Bayes Prep is predicted two percent higher than school 6, which follows with the data since School 6 is the worth performing school and Bayes Prep is unknown to our model so we could expect it's predicted score change to be closer to the mean than the lowest school. The deviation ranges are very similar in magnitude as well.
+
+### C)
+
+```{r}
+set.seed(84735)
+
+
+sch6_predictions <- posterior_predict(
+  scores_hierarchical_model,
+  newdata = data.frame(school_id = c(6,17, "Bayes Prep")))
+
+# Posterior predictive model plots
+mcmc_areas(sch6_predictions, prob = 0.8) +
+  ggplot2::scale_y_discrete(labels = c("6", "17", "Bayes Prep"))
+```
+  
+We anticipate that School 17 will have the highest percent change in score, School 6 the lowest, and Bayes Prep will fall in the middle. This follows logically as School 6 and School 17 were the lowest and highest averages respectively, and Bayes Prep was predicted without data and such should be closer to the mean than the two extreme cases.
+
+### D)
+
+```{r}
+bwc_means <- big_word_club %>% 
+  group_by(school_id) %>% 
+  summarize(count = n(), score_pct_change = mean(score_pct_change))
+
+gbl_mean <- mean(bwc_means$score_pct_change)
+
+set.seed(84735)
+predictions_hierarchical <- posterior_predict(scores_hierarchical_model, 
+                                              newdata = bwc_means)
+
+# Posterior predictive plots
+ppc_intervals(bwc_means$score_pct_change, yrep = predictions_hierarchical, 
+              prob_outer = 0.80) +
+  ggplot2::scale_x_continuous(labels = bwc_means$school_id, 
+                              breaks = 1:nrow(bwc_means)) +
+  xaxis_text(angle = 90, hjust = 1) + 
+  geom_hline(yintercept = gbl_mean, linetype = "dashed")
+
+```
+
+From the 80% posterior plot for all schools in our sample, the no pooled model predictions (dark blue) are consistently further away from the global mean (dashed line) than the hierarchical predictions (light blue). We can say that the model is exhibiting significant shrinkage as all hierarchical predictions are significantly weighted toward the global mean and away from the group specific mean. This follows with what we found earlier in the composition of variance where between-school variance  accounted for only 3% of the total while within-school variance contributed 97%. The heavy weight toward variability within groups implies that the model is heavily relying on global trends because there is little distinction in the patterns from one school to the next. 

@@ -1,0 +1,16 @@
+---
+title: "Template"
+author: "Austin Palmer"
+date: "2023-04-19"
+output:
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+    css: ["./styles/style.css", "./styles/code.css", "./styles/toc.css"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+

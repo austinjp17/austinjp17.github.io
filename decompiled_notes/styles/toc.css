@@ -1,0 +1,10 @@
+/*TOC DIV*/
+/* .tocify {
+    background-color: var(--dm-bg);
+} */
+
+
+/* Level 1 toc */
+.tocify-header, .tocify-item, .tocify-subheader {
+    background-color: var(--dm-toc);
+}

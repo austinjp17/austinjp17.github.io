@@ -1,0 +1,18 @@
+---
+title: "Hierarchical Model Notes"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Examples
+
+-   a sampled group of schools and data $y$ on multiple individual students within each school
+
+-   a sampled group of labs and data $y$ from multiple individual experiments within each lab
+
+-   a sampled group of people on whom we make multiple individual observations $y$ over time
+
+    were we to ignore this
