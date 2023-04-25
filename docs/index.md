@@ -8,7 +8,10 @@
 
 [Negative Binomial Regression Notes](assets/notes/Negative_Binomial_Regression_Notes.html)
 
-[Hierachical Model Notes](assets/notes/Heirachical_model_notes_pdf.html)
+[Hierachical Model No Predictors Notes](assets/notes/Heirachical_model_notes_pdf.html)
+
+
+[Hierachical Model with Predictor Notes](assets/notes/Normal-Hierarchical-Predictors.html)
 
 
 

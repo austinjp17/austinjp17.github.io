@@ -7,7 +7,7 @@ output:
     code_folding: hide
     toc: TRUE
     toc_float: TRUE
-    css: ["./styles/style.css", "./styles/code.css", "./styles/toc.css"]
+    css: ["../styles/style.css", "../styles/code.css", "../styles/toc.css"]
 ---
 
 ```{r setup, include=FALSE}

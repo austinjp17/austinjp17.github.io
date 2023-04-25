@@ -421,7 +421,7 @@ The type of model has a special name: **one-way analysis of variance (ANOVA)**. 
 
 The models we studied prior allowed us to explore *one* source of variability, that in the individual observations $Y$ across an entire population. In contrast, ANOVA enables us to decompose the variance in $Y$ into *two* sources:
 
-1)$\sigma_y^2$: Variance of individual observations $Y$ **within** any given group
+1) $\sigma_y^2$: Variance of individual observations $Y$ **within** any given group
 
 2)  $\sigma_\mu^2$: Variance of features **between** groups
 
