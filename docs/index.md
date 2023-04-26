@@ -12,5 +12,7 @@
 
 [Hierachical Model with Predictor Notes](assets/notes/Normal_Hierarchical_Predictors.html)
 
+[Abnormal Hierarchical Model](assets/notes/Non_Normal_Hierarchical_Regression_Notes.html)
+
 
 
