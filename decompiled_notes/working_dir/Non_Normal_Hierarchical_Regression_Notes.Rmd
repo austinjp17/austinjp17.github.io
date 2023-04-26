@@ -1,0 +1,519 @@
+---
+title: "Template"
+author: "Austin Palmer"
+date: "2023-04-19"
+output:
+  html_document:
+    code_folding: hide
+    toc: TRUE
+    toc_float: TRUE
+    css: ["../styles/style.css", "../styles/code.css", "../styles/toc.css"]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+###### Goals
+
+Expand our generalized hierarchical regression model toolkit by combining:
+
+- Hierarchical regression techniques with
+
+- Poisson and Negative Binomial Regression Models for count response variables $Y$ and logistic regression models for binary categorical response variables $Y$
+
+```{r results='hide'}
+# Load packages
+library(bayesrules)
+library(tidyverse)
+library(bayesplot)
+library(rstanarm)
+library(tidybayes)
+library(broom.mixed)
+library(janitor)
+```
+
+# Random Intercepts Logistic Regression Model
+
+What's the probability that a mountain climber makes it to the top? What factors might contribute to a higher success rate? Beyond a *vague* sense that the typical climber has a 50/50 chance at success, we'll balance our weakly informative prior understanding of these questions with the `climbers_sub` data.
+
+```{r}
+data(climbers_sub)
+climbers <- climbers_sub %>%
+  select(expedition_id, member_id, success, year, season, age, expedition_role, oxygen_used)
+```
+
+This dataset includes the outcomes for 2076 climbers, dating back to 1978. Among them, only 38.87% successfully summited their peak:
+
+```{r}
+nrow(climbers)
+
+climbers %>%
+  tabyl(success)
+```
+
+`expedition_id` is our grouping variable, the `climbers` data spans 200 different expeditions with different numbers of climbers per expedition:
+
+```{r}
+# Size per expedition
+climbers_per_expedition <- climbers %>% 
+  group_by(expedition_id) %>% 
+  summarize(count = n())
+climbers_per_expedition
+
+# Number of expeditions
+nrow(climbers_per_expedition)
+```
+
+It would be a **mistake** to ignore this grouping structure and assume that our individual climber outcomes are independent. Since each expedition works as a *team*, the success or failure of one climber in that expedition depends in part on the success or failure of another. Further, all expedition members start out with the same destination, with the same leaders, and under the same weather conditions, and thus are subject to the same external factors of success. Beyond correctness, accounting for the grouping structure also illuminates the degree to which these factors introduce variability in the success rates *between* expeditions. 
+
+To this end, notice that more than 75 of our 200 expeditions had a 0% success rate - i.e., *no* climbers in these groups made it to the peak. In contrast, nearly 20 expeditions had a 100% success rate. In between these extremes, there's quite a bit of variability:
+
+```{r}
+# Calculate the success rate for each exhibition
+expedition_success <- climbers %>% 
+  group_by(expedition_id) %>% 
+  summarize(success_rate = mean(success))
+
+# Plot the success rates across exhibitions
+ggplot(expedition_success, aes(x = success_rate)) + 
+  geom_histogram(color = "white")
+```
+
+## Model Building
+
+Reflecting the grouped nature of our data, let $Y_{ij}$ denote whether climber $i$ in expedition $j$ successfully summits their peak:
+
+\[ Y_{ij} = \begin{cases} 
+      0 & \text{yes}\\
+      1 & \text{no}
+   \end{cases}
+\]
+
+We'll consider two predictors:
+
+1) Climber age
+
+2) Whether they received supplemental oxygen
+
+$X_{ij1} =$ climber $i$ age in expedition $j$
+
+$X_{ij2} =$ Oxygen dummy variable
+
+Calculating the proportion of success at each age and oxygen use combination, we can get a sense of how these factors are related to climber success. 
+
+```{r}
+data_by_age_oxygen <- climbers %>% 
+  group_by(age, oxygen_used) %>% 
+  summarize(success_rate = mean(success))
+
+# Plot this relationship
+ggplot(data_by_age_oxygen, aes(x = age, y = success_rate, 
+                               color = oxygen_used)) + 
+  geom_point()
+```
+
+In summary, it appears the climber success decreases with age and dramatically increases with the use of oxygen.
+
+In building a Bayesian model of this relationship, first recognize that the Bernoulli model is reasonable for our binary response variable $Y_{ij}$. Letting $\pi_{ij}$ be the probability that climber $i$ in expedition $j$ successfully summits their peak, i.e., that $Y_{ij}$ = 1.
+
+$$Y_{ij}|\pi_{ij} \sim Bern(\pi_{ij})$$
+
+Before we used this **complete pooling** approach to expand the simple model into a **logistic regression model**:
+
+$$Y_{ij}|\beta_0,\beta_1,\beta_2 \sim Bern(\pi_{ij}) \text{ with } log(\frac{\pi_{ij}}{1 - \pi_{ij}}) = \beta_0 + \beta_1X_{ij1} + \beta_2X_{ij2}$$
+
+$$\beta_{0c} \sim N(m_0,s_0^2)$$
+
+$$\beta_1 \sim N(m_1,s_1^2)$$
+
+$$\beta_2 \sim N(m_2,s_2^2)$$
+
+This is a good start, **but doesn't account for the grouping structure**. We combine
+
+
+
+$$Y_{ij}|\beta_{0j},\beta_1,\beta_2 \sim Bern(\pi_{ij}) \text{ with } log({\frac{\pi_{ij}}{1 - \pi_{ij}}}) = \beta_{0j} + \beta_1X_{ij1} + \beta_2X_{ij2} \text{ (model within expedition j)} $$
+
+$$\beta_{0j}|\beta_0,\sigma_0 \sim N(\beta_0, \sigma_0^2) \text{ (variability between expeditions)}$$
+
+$$\text{Global Priors:}$$
+
+$$\beta_{0c} \sim N(0,2.5^2)$$
+
+$$\beta_1 \sim N(0, 0.24^2)$$
+
+$$\sigma_0 \sim Exp(1)$$
+
+*Eventually* we can reframe this **random intercepts logistic regression model** by expression expedition-specific intercepts as *tweaks* to the global intercept:
+
+$$log({\frac{\pi_{ij}}{1 - \pi_{ij}}}) = (\beta_{0} + b_{0j}) + \beta_1X_{ij1} + \beta_2X_{ij2}$$
+
+where $b_{0j}|\sigma_0 \sim N(0, \sigma_0^2). Consider the meaning of, and assumptions behind, the model parameters:
+
+- The **expedition-specific** intercepts $\beta_{0j}$ describe the underlying success rates, as measured by the log(odds of success), for each expedition $j$. These acknowledge that some expeditions are inherently more successful that others.
+
+- The expedition-specific intercepts $\beta_{0j}$ are assumed to be Normal distributed around some global intercept $\beta_0$ with stdev $\sigma_0$ captures the **between-group variability** in success rates from expedition to expedition
+
+- $\beta_1$ describes the **global** relationship between success and age when controlling for oxygen use. Similarly, $\beta_2$ describes the global relationship between success and oxygen use when controlling for age.
+
+Putting this all together, our random intercepts logistic regression model makes the simplifying but reasonable assumption that expeditions might have *unique* intercepts $\beta_{0j}$, but share common regression parameters $\beta_1$ and $\beta_2$. **In plain language**, thought the *underlying success rates* might differ from expedition to expedition, being younger or using oxygen aren't more beneficial in one expedition than in another.
+
+## Model Simulation
+
+`family = binomial` specifies that ours is a *logistic* regression
+
+`(1 | expedition_id)` incorporates our grouping structure
+
+```{r, results=FALSE}
+climb_model <- stan_glmer(
+  success ~ age + oxygen_used + (1 | expedition_id), 
+  data = climbers, family = binomial,
+  prior_intercept = normal(0, 2.5, autoscale = TRUE),
+  prior = normal(0, 2.5, autoscale = TRUE), 
+  prior_covariance = decov(reg = 1, conc = 1, shape = 1, scale = 1),
+  chains = 4, iter = 5000*2, seed = 84735
+)
+```
+
+
+```{r}
+# Define success rate function
+success_rate <- function(x){mean(x == 1)}
+
+# Posterior predictive check
+pp_check(climb_model, nreps = 100,
+         plotfun = "stat", stat = "success_rate") + 
+  xlab("success rate")
+```
+
+A posterior predictive check indicators that our  model is on the right track. For each of 100 posterior simulated datasets, we record the proportion of climbers that were successful using the `success_rate()` function. These success rates range from roughly 36% to 41%, in a tight window around the actual observed 38.9% success rate in the `climbers` data.
+
+## Posterior Analysis
+
+Lets focus on the global, we're not really interested in any *particular* expedition beyond being comforted we're correctly accounting for the grouping structure. Below are the posterior summaries for our global regression parameters:
+
+```{r}
+tidy(climb_model, effects = "fixed", conf.int = TRUE, conf.level = 0.80)
+```
+
+Observations:
+
+1) `age` 80% Posterior credible interval is comfortably below 0. We have significant evidence that, when controlling for whether or not a climber uses oxygen, the likelihood of success decreases with age. More specifically, there's an 80% chance that the *odds* of successfully summiting drop between 3.5% and 5.8% for every extra year of age: ($e^{-0.0594},e^{-0.0358}$) = (0.942, 0.965).
+
+2) `oxygen_usedTRUE` coefficient $\beta_2$ provides *significant* posterior evidence that, when controlling for age, the use of oxygen dramatically increases a climbers likelihood of summiting the peak. 80% chance that the use of oxygen corresponds to anywhere between an 182-fold increase to a 617-fold increase in the odds of success: ($e^{5.2},e^{6.43}$) = (182,617).
+
+Combining our observations on $\beta_1$ and $\beta_2$, the posterior median model of the relationship between climbers' log(odds of success) and their age($X_1$) and oxygen use ($X_2$) is:
+
+$$log(\frac{\pi}{1-\pi}) = -1.42 - 0.0474X_1 + 5.79X_2$$
+
+Or, on the probability of success scale:
+
+$$\pi = \frac{exp(-1.42 - 0.0474X_1 + 5.79X_2)}{1 + exp(-1.42 - 0.0474X_1 + 5.79X_2)}$$
+
+This represents the *center* among a range of posterior plausible relationship between success, age, and oxygen use. To get a sense for this range, we plot 100 posterior plausible alternative models below.
+
+```{r}
+climbers %>%
+  add_fitted_draws(climb_model, n = 100, re_formula = NA) %>%
+  ggplot(aes(x = age, y = success, color = oxygen_used)) +
+    geom_line(aes(y = .value, group = paste(oxygen_used, .draw)), 
+              alpha = 0.1) + 
+    labs(y = "probability of success")
+```
+
+Both with oxygen and without, the probability of success decreases with age. Further, at any give age, the probability of success is *drastically* high when climbers use oxygen. However, our posterior certainty in these trends varies quite a bit by age. We have *much* less certainty about the success rate for older climbers on oxygen than for younger climbers on oxygen, or whom the success rate is uniformly high. Similarly, but less drastically, we have less certainty about the success rate for younger climbers who don't use oxygen than for older climbers who don't use oxygen, fo whom the success rate is uniformly low.
+
+## Posterior Prediction
+
+Suppose four climbers set out on a new expedition. Two are 20 years old and two are 60 years old. Among both age pairs, one climber plans to use oxygen and the other does not:
+
+```{r}
+new_expedition <- data.frame(
+  age=c(20, 20, 60, 60), oxygen_used = c(FALSE, TRUE, FALSE, TRUE),
+  expedition_id = rep("new", 4)
+)
+new_expedition
+```
+
+To find the probability that they'll reach their summit:
+
+```{r}
+# Posterior predictions of binary outcome
+set.seed(84735)
+binary_prediction <- posterior_predict(climb_model, newdata = new_expedition)
+
+head(binary_prediction, 3)
+
+```
+
+For each climber, the probability of success is approximated by the observed proportion of success among their 20,000 posterior predictions. Since these probabilities incorporate uncertainty in the baseline success rate of the new expedition, they are more moderate than the global trends observed earlier:
+
+```{r}
+colMeans(binary_prediction)
+```
+
+These predictions provide more insight into connections between age, oxygen, and success. For example, our prediction is that climber 1, who is 20 years old and does *not* plan to use oxygen, has a 27.88 chance of summiting the peak. This probability is naturally lower than for climber 2, who is also 20 but *does* plan to use oxygen. It's also higher than the prediction of success for climber 3, who doesn't plan to use oxygen but is 60 years old. Overall, the posterior prediction of success is *highest* for climber 2, who is younger and plans to use oxygen, and *lowest* for climber 3, who is older and doesn't plan to use oxygen.
+
+## Posterior Classification
+
+We previously discussed the option of turning such posterior probability predictions into **posterior classifications** of binary outcomes: yes or no, do we anticipate that the climber will succeed or not? If we used a simple 0.5 posterior probability cut-off to make this determination, we would recommend that climbers 1 and 3 *not* join the expedition (at least, not without oxygen) and give climbers 2 and 4 the go ahead. Yet  in this particular context, we should probably leave it up to the individual climbers to interpret their own results and make their own yes-or-no decisions about whether to continue. For example, a 65.16% chance of success might be worth the hassle and risk to some, but not to others.
+
+## Model Evaulation
+
+Is our hierarchical logistic model a *good* model?
+
+Yes b/c:
+
+1) Our model is **fair**. The data we used are part of public record and we do not foresee our analysis having any negative impact on individuals or society. 
+
+2) Our posterior predictive check demonstrated that our model **doesn't seem too wrong** - our posterior simulated success rates hover around the observed success rate in our data
+
+3) **Posterior classification accuracy**: We compare our posterior classifications of success to the actual outcomes for 2076 climbers in our dataset. By default, lets start out with a **probability cut-off of 0.5**. We implement and evaluate using `classification_summary()` below. 
+
+```{r}
+set.seed(84735)
+classification_summary(data = climbers, model = climb_model, cutoff = 0.5)
+```
+
+Overall, under this classification rule, our model successfully predicts outcomes fo 91.71% of our climbers. Yet given the consequences of misclassification in this context, we should prioritize **specificity**, our ability to anticipate when a climber might *not* succeed. To this end, our model correctly predicted only 92.51% of the climbing failures. To increase this rate, we can change the probability cut-off in our classification rule.
+
+In general, **to increase specificity**, we can increase the probability cut-off, thereby making it more difficult to predict "success".
+
+```{r}
+set.seed(84537)
+classification_summary(model=climb_model, data=climbers, cutoff = 0.65)
+```
+
+This switch to 0.5 decreases the sensitivity of our posterior classifications, from 90.46% to 81.54%, and thus our ability to detect when a climber *will* be successful. We think the caution is worth it. 
+
+# Hierarchical Poisson & Negative Binomial Regression
+
+Vacation Rental Service offer travelers alternatives to hotel rooms. The AirBnB inventory and price range are wide, leading us to ask: why do some listings have more reviews than others? Beyond a *vague* understanding that the typical listing has around 20 reviews, we're unsure of the dynamics in the AirBnB market, and thus will use weakly informative priors. We'll use the `airbnb` data in the `bayesrules` package. This dataset contains information on 1561 listings across 43 Chicago neighborhoods, and hence *multiple listings per neighborhood*.
+
+```{r}
+# Load data
+data("airbnb")
+
+# Number of listings
+nrow(airbnb)
+
+
+```
+# Number of neighborhoods
+airbnb %>% 
+  summarize(nlevels(neighborhood))
+  nlevels(neighborhood)
+
+
+To reflect and study the variability in the number of AirBnB `reviews` *between* and *within* neighborhoods, we'll incorporate the `neighborhood` grouping structure in our analysis.
+
+## Model Building
+
+We'll consider two factors to explain the variation in number of `reviews` between AirBnB listings:
+
+1) `rating`: 1-5 scale
+
+2) `room_type`: whether renter gets private unit, private room, or shared room.
+
+### Var Definitions
+
+$$Y_{ij} = \text{Number of Reviews}$$ 
+
+$$X_{ij1} = \text{Vistor Rating[1:5]}$$
+
+*Two indicator variables to represent 3 room types:*
+
+\[ X_{ij2} = \begin{cases} 
+      0 & \text{Private Room}\\
+      1 & \text{Otherwise}
+   \end{cases}
+\]
+
+\[ X_{ij3} = \begin{cases} 
+      0 & \text{Shared Room}\\
+      1 & \text{Otherwise}
+   \end{cases}
+\]
+
+### Data Trends
+
+```{r}
+ggplot(airbnb, aes(x = reviews)) + 
+  geom_histogram(color = "white", breaks = seq(0, 200, by = 10))
+```
+
+First note that the distribution of our response variable is lower bounded at 0, and peaks in the first bin with a long right skew. 
+
+```{r}
+ggplot(airbnb, aes(y = reviews, x = rating)) + 
+  geom_jitter()
+ggplot(airbnb, aes(y = reviews, x = room_type)) + 
+  geom_violin()
+```
+
+Further, the volume of reviews tends to increase with ratings and privacy levels.
+
+We can further break down these dynamics within each neighborhood. We show three here. In general, notice that Albany Park listings tend to have fewer reviews, no matter their rating or room type.
+
+```{r}
+airbnb %>% 
+  filter(neighborhood %in% 
+           c("Albany Park", "East Garfield Park", "The Loop")) %>% 
+  ggplot(aes(y = reviews, x = rating, color = room_type)) + 
+    geom_jitter() + 
+    facet_wrap(~ neighborhood)
+```
+
+### Define Model
+
+In building a regression model for the number of reviews, the first step is to consider reasonable probability models for data $Y_{ij}$. Since the $Y_{ij}$ values are *non-negative skewed counts*, a **Poisson** model is a good starting point. Let $\lambda_{ij}$ denote the expected number of reviews received by listing $i$ in neighborhood $j$:
+
+$$Y_{ij}|\lambda_{ij} \sim Pois(\lambda_{ij})$$
+
+### Hierarchical Poisson Regression Model
+
+$$Y_{ij}{|\beta_{0j},\beta_1,\beta_2,\beta_3 \sim Pois(\lambda_{ij})} \text{ with } log(\lambda_{ij}) = \beta_{0j} + \beta_1X_{ij1} + \beta_2X_{ij2} + \beta_3X_{ij3}$$
+
+$$\beta_{0j}|\beta_0,\sigma_0 \sim N(\beta_0, \sigma_0^2)$$
+
+$$\beta_{0c} \sim N(3, 2.5^2)$$
+
+$$\beta_1 \sim N(0, 7.37^2)$$
+
+$$\beta_2 \sim N(0, 5.04^2)$$
+
+$$\beta_3 \sim N(0, 14.19^2)$$
+
+$$\sigma_0 \sim Exp(1)$$
+
+Assumes neighborhoods might have unique intercepts $\beta_{0j}$, but share common regression parameters ($\beta_1,\beta_2,\beta_3$). In English: though some neighborhoods might have might have more popular AirBnB destinations that others, the relationship of reviews with ratings and room type is the same for each neighborhood. For instance, ratings aren't more influential to reviews in one neighborhood than in another. 
+
+```{r, results=FALSE}
+airbnb_model_1 <- stan_glmer(
+  reviews ~ rating + room_type + (1 | neighborhood),
+  data=airbnb, family=poisson,
+  prior_intercept = normal(3, 2.5, autoscale=TRUE),
+  prior = normal(0, 2.5, autoscale=TRUE),
+  prior_covariance = decov(reg=1,conc=1,shape=1,scale=1),
+  chains=4, iter= 5000*2, seed=84735
+)
+```
+
+```{r}
+pp_check(airbnb_model_1)+
+  xlim(0,200) +
+  xlab("reviews")
+```
+
+Our posterior check indicates that our hierarchical Poisson regression model significantly underestimates the variability in reviews from listing to listing, while overestimating the typical number of reviews. Recall that an underlying Poisson regression assumption is that, at any set of predictor values, the *average* number of reviews is equal to the variance in reviews:
+
+$$E(Y_{ij}) = Var(Y_{ij}) = \lambda_{ij}$$
+
+Our posterior check calls this assumption into question. To address the apparent **overdispersion** in the $Y_{ij}$ values, we swap out the Poisson model for the more flexible Negative Binomial model
+
+### Hierarchical Negative Binomial Regression Model
+
+Picking up the additional reciprocal dispersion parameter $r > 0$:
+
+$$Y_{ij}{|\beta_{0j},\beta_1,\beta_2,\beta_3 \sim NegBin(\mu_{ij},r)} \text{ with } log(\mu_{ij}) = \beta_{0j} + \beta_1X_{ij1} + \beta_2X_{ij2} + \beta_3X_{ij3}$$
+
+$$\beta_{0j}|\beta_0,\sigma_0 \sim N(\beta_0, \sigma_0^2)$$
+
+$$\beta_{0c} \sim N(3, 2.5^2)$$
+
+$$\beta_1 \sim N(0, 7.37^2)$$
+
+$$\beta_2 \sim N(0, 5.04^2)$$
+
+$$\beta_3 \sim N(0, 14.19^2)$$
+$$r \sim Exp(1)$$
+
+$$\sigma_0 \sim Exp(1)$$
+
+Equivalently, we can express the random intercepts as tweaks to the global intercept:
+
+$$log(\mu_{ij}) = (\beta_0 + b_{0j}) + \beta_1X_{ij1} + \beta_2X_{ij2} + \beta_3X_{ij3}$$
+
+where $\b_{0j}|\sigma_0 \sim N(0,\sigma_0^2)$. To simulate the posterior we can swap out `family = poisson` for `family = neg_binomial_2`:
+
+```{r}
+airbnb_model_2 <- stan_glmer(
+  reviews ~ rating + room_type + (1 | neighborhood),
+  data = airbnb, family = neg_binomial_2, 
+  prior_intercept = normal(3, 2.5, TRUE),
+  prior = normal(0, 2.5, TRUE),
+  prior_aux = exponential(1, TRUE),
+  prior_covariance = decov(1,1,1,1),
+  chains = 4, iter = 5000*2, seed = 84735
+)
+```
+
+Though not perfect, the negative binomial model does a *much* better job capturing behavior in reviews from listing to listing:
+
+```{r}
+pp_check(airbnb_model_2) +
+  xlim(0, 200) +
+  xlab("reviews")
+
+```
+
+## Posterior Analysis
+
+First lets explore the global relationship of reviews with ratings and room type, $log(\lambda_{ij}) = \beta_0 + \beta_1X_{ij1} + \beta_2X_{ij2} + \beta_3X_{ij3}$, or:
+
+$$\lambda_{ij} = exp(\beta_0 + \beta_1X_{ij1} + \beta_2X_{ij2} + \beta_3X_{ij3})$$
+
+Below are posterior summaries of our global parameters ($\beta_0, \beta_1, \beta_2, \beta_3$).
+
+```{r}
+tidy(airbnb_model_2, effects="fixed", conf.int=TRUE, conf.level=0.8)
+```
+
+From the summaries, the posterior model of $\beta_1$ reflects a significant and substantive positive association between reviews and rating. When controlling, there's an 80% chance that the volume of reviews increases somewhere between 1.17 and 1.45 times (17% - 45%), or every extra point in rating: ($e^{0.154}, e^{0.371}$) = (1.17, 1.45). 
+
+In Contrast, the posterior model of $\beta_3$ illustrates that shared rooms are negatively associated with reviews. When controlling for ratings, there's an 80% chance that the volume of reviews for shared room listings is somewhere between 52 and 76 percent as high as for listings that are entirely private: ($e^{0.659}, e^{-0.275}$) = (0.52, 0.76)
+
+Lets also look at some **neighborhood-specific** AirBnB models. We'll focus on the three same neighborhoods.
+
+```{r}
+tidy(airbnb_model_2, effects = "ran_vals", 
+     conf.int = TRUE, conf.level = 0.80) %>% 
+  select(level, estimate, conf.low, conf.high) %>% 
+  filter(level %in% c("Albany_Park", "East_Garfield_Park", "The_Loop"))
+```
+
+
+Note that:
+
+1) AirBnB listings in Albany Park have atypically few reviews
+
+2) East Garfield Park has atypically larger number of reviews
+
+3) Those in the loop do not significantly differ from average
+
+Below we simulate 3 listings each with 5 star ratings and whole unit private in different locations:
+
+```{r}
+# Posterior predictions of reviews
+set.seed(84735)
+predicted_reviews <- posterior_predict(
+  airbnb_model_2, 
+  newdata = data.frame(
+    rating = rep(5, 3), 
+    room_type = rep("Entire home/apt", 3), 
+    neighborhood = c("Albany Park", "East Garfield Park", "The Loop")))
+mcmc_areas(predicted_reviews, prob = 0.8) +
+  ggplot2::scale_y_discrete(
+    labels = c("Albany Park", "East Garfield Park", "The Loop")) + 
+  xlim(0, 150) + 
+  xlab("reviews")
+```
+
+
+```{r}
+set.seed(84735)
+prediction_summary(airbnb_model_2, data = airbnb)
+```
+
